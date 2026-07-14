@@ -1,0 +1,709 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                      String                  @id @default(uuid()) @db.Uuid
+  name                    String?
+  email                   String                  @unique
+  emailVerified           DateTime?
+  image                   String?
+  passwordHash            String?
+  username                String?                 @unique
+  position                String?
+  department              String?
+  bio                     String?
+  timezone                String?
+  skills                  Json?
+  github                  String?
+  linkedin                String?
+  portfolio               String?
+  status                  UserStatus              @default(ACTIVE)
+  lastActiveAt            DateTime?
+  activeWorkspaceId       String?                 @db.Uuid
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  deletedAt               DateTime?
+  accounts                Account[]
+  attachments             Attachment[]
+  auditLogs               AuditLog[]
+  createdChannels         Channel[]               @relation("ChannelCreator")
+  channelMemberships      ChannelMember[]
+  conversationMemberships ConversationMember[]
+  sentInvitations         Invitation[]            @relation("SentInvitations")
+  meetings                Meeting[]               @relation("MeetingCreator")
+  meetingMemberships      MeetingMember[]
+  messages                Message[]
+  messageAttachments      MessageAttachment[]
+  messageReactions        MessageReaction[]
+  notifications           Notification[]
+  notificationPrefs       NotificationPreference?
+  ownedProjects           Project[]
+  projectMembers          ProjectMember[]
+  sessions                Session[]
+  tasks                   Task[]                  @relation("TaskAssignee")
+  taskReporter            Task[]                  @relation("TaskReporter")
+  taskComments            TaskComment[]
+  ownedTeams              Team[]                  @relation("TeamLead")
+  memberships             TeamMember[]
+  activeWorkspace         Workspace?              @relation(fields: [activeWorkspaceId], references: [id])
+  workspaceMemberships    WorkspaceMember[]
+
+  @@index([email])
+  @@index([deletedAt])
+  @@index([username])
+}
+
+model Account {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Uuid
+  sessionToken String   @unique
+  userId       String   @db.Uuid
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Workspace {
+  id            String            @id @default(uuid()) @db.Uuid
+  name          String
+  slug          String            @unique
+  logo          String?
+  industry      String?
+  companySize   String?
+  timezone      String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  deletedAt     DateTime?
+  auditLogs     AuditLog[]
+  channels      Channel[]
+  conversations Conversation[]
+  invitations   Invitation[]
+  meetings      Meeting[]
+  messages      Message[]
+  notifications Notification[]
+  sprints       Sprint[]
+  teams         Team[]
+  activeUsers   User[]
+  members       WorkspaceMember[]
+
+  @@index([slug])
+  @@index([deletedAt])
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String        @db.Uuid
+  workspaceId String        @db.Uuid
+  role        WorkspaceRole @default(DEVELOPER)
+  joinedAt    DateTime      @default(now())
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+model Invitation {
+  id          String           @id @default(uuid()) @db.Uuid
+  email       String
+  workspaceId String           @db.Uuid
+  invitedById String?          @db.Uuid
+  token       String           @unique
+  role        WorkspaceRole    @default(DEVELOPER)
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  invitedBy   User?            @relation("SentInvitations", fields: [invitedById], references: [id])
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([email])
+  @@index([token])
+  @@index([status])
+}
+
+model Team {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String       @unique
+  description String?
+  color       String?
+  icon        String?
+  avatarUrl   String?
+  leadId      String?      @db.Uuid
+  workspaceId String?      @db.Uuid
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?
+  auditLogs   AuditLog[]
+  projects    Project[]
+  lead        User?        @relation("TeamLead", fields: [leadId], references: [id])
+  workspace   Workspace?   @relation(fields: [workspaceId], references: [id])
+  members     TeamMember[]
+
+  @@index([slug])
+  @@index([deletedAt])
+  @@index([workspaceId])
+  @@index([leadId])
+}
+
+model TeamMember {
+  id       String   @id @default(uuid()) @db.Uuid
+  userId   String   @db.Uuid
+  teamId   String   @db.Uuid
+  role     Role     @default(MEMBER)
+  joinedAt DateTime @default(now())
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+model Project {
+  id          String            @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String
+  description String?
+  status      String            @default("active")
+  priority    String            @default("medium")
+  visibility  ProjectVisibility @default(TEAM_ONLY)
+  favorite    Boolean           @default(false)
+  color       String?
+  icon        String?
+  labels      Json?
+  progress    Int               @default(0)
+  startDate   DateTime?
+  dueDate     DateTime?
+  teamId      String            @db.Uuid
+  ownerId     String            @db.Uuid
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
+  attachments Attachment[]
+  auditLogs   AuditLog[]
+  owner       User              @relation(fields: [ownerId], references: [id])
+  team        Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  members     ProjectMember[]
+  sprints     Sprint[]
+  tasks       Task[]
+
+  @@unique([teamId, slug])
+  @@index([teamId])
+  @@index([ownerId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  projectId String   @db.Uuid
+  role      Role     @default(MEMBER)
+  joinedAt  DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+}
+
+model Task {
+  id            String           @id @default(uuid()) @db.Uuid
+  title         String
+  description   String?
+  status        String           @default("backlog")
+  priority      String           @default("medium")
+  labels        Json?
+  estimatedTime Int?
+  timeSpent     Int?
+  assigneeId    String?          @db.Uuid
+  projectId     String           @db.Uuid
+  parentId      String?          @db.Uuid
+  sprintId      String?          @db.Uuid
+  dueDate       DateTime?
+  sortOrder     Float            @default(0)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  deletedAt     DateTime?
+  reporterId    String?          @db.Uuid
+  startDate     DateTime?
+  storyPoints   Int?
+  attachments   Attachment[]
+  auditLogs     AuditLog[]
+  checklists    ChecklistItem[]
+  assignee      User?            @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  parent        Task?            @relation("TaskParent", fields: [parentId], references: [id])
+  children      Task[]           @relation("TaskParent")
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reporter      User?            @relation("TaskReporter", fields: [reporterId], references: [id])
+  sprint        Sprint?          @relation(fields: [sprintId], references: [id])
+  comments      TaskComment[]
+  dependedOnBy  TaskDependency[] @relation("TaskDependedOn")
+  dependencies  TaskDependency[] @relation("TaskDependencies")
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([reporterId])
+  @@index([status])
+  @@index([sprintId])
+  @@index([projectId, status])
+  @@index([deletedAt])
+}
+
+model TaskDependency {
+  id           String   @id @default(uuid()) @db.Uuid
+  taskId       String   @db.Uuid
+  dependencyId String   @db.Uuid
+  type         String   @default("depends_on")
+  createdAt    DateTime @default(now())
+  dependency   Task     @relation("TaskDependedOn", fields: [dependencyId], references: [id], onDelete: Cascade)
+  task         Task     @relation("TaskDependencies", fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependencyId])
+  @@index([taskId])
+  @@index([dependencyId])
+}
+
+model TaskComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  content   String
+  taskId    String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
+}
+
+model Sprint {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String
+  goal        String?
+  status      String     @default("planning")
+  velocity    Int        @default(0)
+  startDate   DateTime?
+  endDate     DateTime?
+  projectId   String     @db.Uuid
+  workspaceId String?    @db.Uuid
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  tasks       Task[]
+
+  @@index([projectId])
+  @@index([workspaceId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model ChecklistItem {
+  id        String   @id @default(uuid())
+  title     String
+  completed Boolean  @default(false)
+  sortOrder Float    @default(0)
+  taskId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model Attachment {
+  id           String   @id @default(uuid())
+  name         String
+  url          String
+  type         String
+  size         Int      @default(0)
+  taskId       String?  @db.Uuid
+  projectId    String?  @db.Uuid
+  uploadedById String   @db.Uuid
+  createdAt    DateTime @default(now())
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task         Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+
+  @@index([taskId])
+  @@index([projectId])
+  @@index([uploadedById])
+}
+
+model Notification {
+  id          String               @id @default(uuid()) @db.Uuid
+  userId      String               @db.Uuid
+  workspaceId String?              @db.Uuid
+  type        String
+  title       String
+  message     String?
+  read        Boolean              @default(false)
+  link        String?
+  actorId     String?              @db.Uuid
+  createdAt   DateTime             @default(now())
+  actions     Json?
+  archived    Boolean              @default(false)
+  batchId     String?
+  category    NotificationCategory @default(WORKSPACE)
+  entityId    String?
+  entityType  String?
+  expiredAt   DateTime?
+  pinned      Boolean              @default(false)
+  priority    NotificationPriority @default(NORMAL)
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace?           @relation(fields: [workspaceId], references: [id])
+
+  @@index([userId, read])
+  @@index([userId, category, read])
+  @@index([userId, archived])
+  @@index([createdAt])
+  @@index([workspaceId])
+  @@index([batchId])
+}
+
+model Channel {
+  id          String          @id @default(uuid()) @db.Uuid
+  workspaceId String          @db.Uuid
+  name        String
+  slug        String
+  description String?
+  icon        String?
+  color       String?
+  type        ChannelType     @default(PUBLIC)
+  archived    Boolean         @default(false)
+  createdBy   String          @db.Uuid
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  creator     User            @relation("ChannelCreator", fields: [createdBy], references: [id])
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members     ChannelMember[]
+  messages    Message[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+  @@index([createdBy])
+}
+
+model ChannelMember {
+  id        String      @id @default(uuid()) @db.Uuid
+  channelId String      @db.Uuid
+  userId    String      @db.Uuid
+  role      ChannelRole @default(MEMBER)
+  joinedAt  DateTime    @default(now())
+  channel   Channel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([channelId])
+  @@index([userId])
+}
+
+model Conversation {
+  id          String               @id @default(uuid()) @db.Uuid
+  workspaceId String               @db.Uuid
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members     ConversationMember[]
+  messages    Message[]
+
+  @@index([workspaceId])
+}
+
+model ConversationMember {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  userId         String       @db.Uuid
+  joinedAt       DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+}
+
+model Message {
+  id             String              @id @default(uuid()) @db.Uuid
+  workspaceId    String              @db.Uuid
+  channelId      String?             @db.Uuid
+  conversationId String?             @db.Uuid
+  senderId       String              @db.Uuid
+  content        String
+  type           MessageType         @default(TEXT)
+  status         MessageStatus       @default(SENT)
+  edited         Boolean             @default(false)
+  pinned         Boolean             @default(false)
+  deleted        Boolean             @default(false)
+  parentId       String?             @db.Uuid
+  replyCount     Int                 @default(0)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  channel        Channel?            @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  conversation   Conversation?       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parent         Message?            @relation("MessageThread", fields: [parentId], references: [id])
+  replies        Message[]           @relation("MessageThread")
+  sender         User                @relation(fields: [senderId], references: [id])
+  workspace      Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  attachments    MessageAttachment[]
+  editHistory    MessageEdit[]
+  reactions      MessageReaction[]
+
+  @@index([channelId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@index([workspaceId])
+  @@index([parentId])
+}
+
+model MessageAttachment {
+  id          String   @id @default(uuid()) @db.Uuid
+  messageId   String   @db.Uuid
+  fileName    String
+  mimeType    String
+  size        Int      @default(0)
+  storagePath String
+  uploadedBy  String   @db.Uuid
+  createdAt   DateTime @default(now())
+  message     Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploader    User     @relation(fields: [uploadedBy], references: [id])
+
+  @@index([messageId])
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @db.Uuid
+  emoji     String
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+model MessageEdit {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @db.Uuid
+  content   String
+  editedAt  DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([editedAt])
+}
+
+model NotificationPreference {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @unique @db.Uuid
+  settings        Json?
+  digestFrequency String   @default("instant")
+  browserEnabled  Boolean  @default(true)
+  emailEnabled    Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String?    @db.Uuid
+  workspaceId String?    @db.Uuid
+  teamId      String?    @db.Uuid
+  projectId   String?    @db.Uuid
+  taskId      String?    @db.Uuid
+  action      String
+  entity      String
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+  project     Project?   @relation(fields: [projectId], references: [id])
+  task        Task?      @relation(fields: [taskId], references: [id])
+  team        Team?      @relation(fields: [teamId], references: [id])
+  user        User?      @relation(fields: [userId], references: [id])
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([teamId])
+  @@index([projectId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+model Meeting {
+  id              String          @id @default(uuid()) @db.Uuid
+  title           String
+  description     String?
+  date            String
+  time            String
+  duration        Int?
+  status          MeetingStatus   @default(SCHEDULED)
+  meetingProvider String?
+  meetingLink     String?
+  meetingCode     String?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  workspaceId     String          @db.Uuid
+  creatorId       String          @db.Uuid
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  creator   User            @relation("MeetingCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   MeetingMember[]
+
+  @@index([workspaceId])
+  @@index([creatorId])
+  @@index([status])
+}
+
+model MeetingMember {
+  id        String    @id @default(uuid()) @db.Uuid
+  meetingId String    @db.Uuid
+  userId    String    @db.Uuid
+  joinedAt  DateTime?
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([meetingId])
+  @@index([userId])
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  STARTING
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MANAGER
+  DEVELOPER
+  DESIGNER
+  QA
+  GUEST
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+enum UserStatus {
+  ACTIVE
+  AWAY
+  BUSY
+  OFFLINE
+}
+
+enum ProjectVisibility {
+  PUBLIC
+  PRIVATE
+  TEAM_ONLY
+}
+
+enum ChannelType {
+  PUBLIC
+  PRIVATE
+  ANNOUNCEMENT
+}
+
+enum ChannelRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum NotificationCategory {
+  WORKSPACE
+  PROJECT
+  TASK
+  SPRINT
+  MESSAGE
+  MENTION
+  REACTION
+  COMMENT
+  REPLY
+  INVITATION
+  REMINDER
+  SYSTEM
+  AI
+}
